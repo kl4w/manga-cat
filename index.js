@@ -2,7 +2,6 @@
 
 'use strict';
 
-const fs = require('fs');
 const mkdirp = require('mkdirp');
 const program = require('commander');
 const Xray = require('x-ray');
@@ -84,23 +83,9 @@ function getImageURL(sliced_url, i) {
   });
 }
 
-function downloadImage(images, chapter_list, chapter, i) {
-  images.forEach((image) => {
+function downloadImage(sliced_url, chapter_list, chapter, i) {
+  return getImageURL(sliced_url, i).then((image) => {
     return new Promise((resolve, reject) => {
-      // var download = (image, filename, callback) => {
-      //   request.head(image, function(err, res, body){
-      //     console.log('content-type:', res.headers['content-type']);
-      //     console.log('content-length:', res.headers['content-length']);
-
-      //     request(image).pipe(fs.createWriteStream(filename));
-      //   });
-      // };
-
-      // download(image, 'Chapter ' + chapter.name + ' - 0' + i + '.png', function() {
-      //   resolve();
-      // });
-      if (err) reject(new Error(err));
-
       let download = new Download();
       let filename = i + '.png';
       if (i < 10) {
@@ -117,47 +102,34 @@ function downloadImage(images, chapter_list, chapter, i) {
 }
 
 function downloadChapters(chapter_list) {
-  chapter_list.chapters.forEach((chapter) => {
-    let url = chapter.url;
-    let length = 0;
+    chapter_list.chapters.forEach((chapter) => {
+      let url = chapter.url;
+      let length = 0;
 
-    const getLength = new Promise((resolve, reject) => {
-      x(url, '.main-body .btn-group:last-child .dropdown-menu li:last-child a')((err, result) => {
-        if (err) {
-          reject(new Error(err));
-        } else {
-          let regExp = /\(([^)]+)\)/g;
-          let matches = regExp.exec(result);
-          length = matches[1];
-          resolve(result);
+      const getLength = new Promise((resolve, reject) => {
+        x(url, '.main-body .btn-group:last-child .dropdown-menu li:last-child a')((err, result) => {
+          if (err) {
+            reject(new Error(err));
+          } else {
+            let regExp = /\(([^)]+)\)/g;
+            let matches = regExp.exec(result);
+            length = matches[1];
+            resolve(result);
+          }
+        });
+      });
+
+      getLength.then((results) => {
+        // remove last digit from url that looks like this: http://readms.com/r/platinum_end/001/3013/1
+        let sliced_url = url.slice(0, -1);
+        let images_array = [];
+        let downloads_array = [];
+
+        for (let i = 1; i <= length; i++) {
+          images_array.push(downloadImage(sliced_url, chapter_list, chapter, i));
         }
+
+        return Promise.all(images_array);
       });
     });
-
-    getLength.then((results) => {
-      // remove last digit from url that looks like this: http://readms.com/r/platinum_end/001/3013/1
-      let sliced_url = url.slice(0, -1);
-      let images_array = [];
-      let downloads_array = [];
-
-      for (let i = 1; i <= length; i++) {
-        images_array.push(getImageURL(sliced_url, i));
-      }
-
-      let p1 = Promise.all(images_array).then((images) => {
-        console.log(images);
-        downloads_array.push(downloadImage(images, chapter_list, chapter, i));
-      });
-
-      Promise.all(downloads_array).then((result) => {
-        console.log(downloads_array);
-        console.log('done');
-      });
-
-      Promise.all([p1, p2]).then((result) => {
-        console.log(result);
-        process.exit(0);
-      });
-    });
-  });
 }

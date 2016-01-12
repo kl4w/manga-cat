@@ -26,6 +26,7 @@
   "dependencies": {
     "commander": "^2.9.0",
     "download": "^4.4.3",
+    "fs": "0.0.2",
     "mkdirp": "^0.5.1",
     "request": "^2.67.0",
     "x-ray": "^2.0.3"

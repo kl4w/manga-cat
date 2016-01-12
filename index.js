@@ -2,12 +2,17 @@
 
 'use strict';
 
+const fs = require('fs');
 const mkdirp = require('mkdirp');
 const program = require('commander');
 const Xray = require('x-ray');
 const Download = require('download');
 const request = require('request');
 const x = new Xray();
+
+const downloadRequest = request.defaults({
+  pool: {maxSockets: Infinity}
+});
 
 program
   .version('0.1.0')
@@ -74,29 +79,27 @@ function getChaptersFrom(url) {
   });
 }
 
-function getImageURL(sliced_url, i) {
+function downloadImage(sliced_url, dest, i) {
   return new Promise((resolve, reject) => {
     x(sliced_url + i, 'img#manga-page@src')((err, image) => {
       if (err) reject(new Error(err));
-      resolve(image);
-    });
-  });
-}
-
-function downloadImage(sliced_url, chapter_list, chapter, i) {
-  return getImageURL(sliced_url, i).then((image) => {
-    return new Promise((resolve, reject) => {
-      let download = new Download();
       let filename = i + '.png';
       if (i < 10) {
         filename = '0'.concat(i, '.png');
       }
 
-      download.get(image);
-      download.rename(filename);
-      download.dest('./downloads/' + chapter_list.title + '/Chapter ' + chapter.name);
-      console.log(chapter_list.title + ' - Chapter ' + chapter.name + ' - Page ' + i);
-      resolve(download.run());
+
+
+      downloadRequest
+        .get(image)
+        .on('error', (err) => {
+          console.error(err);
+        })
+        .pipe(fs.createWriteStream(dest + '/' + filename))
+        .on('finish', () => {
+          console.log('downloaded: ' + dest + '/' + filename);
+          resolve();
+        });
     });
   });
 }
@@ -105,6 +108,14 @@ function downloadChapters(chapter_list) {
     chapter_list.chapters.forEach((chapter) => {
       let url = chapter.url;
       let length = 0;
+      let dest = './downloads/' + chapter_list.title + '/Chapter ' + chapter.name;
+
+      mkdirp(dest, (err) => {
+        if (err) {
+          console.error(err);
+          throw err;
+        }
+      });
 
       const getLength = new Promise((resolve, reject) => {
         x(url, '.main-body .btn-group:last-child .dropdown-menu li:last-child a')((err, result) => {
@@ -126,7 +137,7 @@ function downloadChapters(chapter_list) {
         let downloads_array = [];
 
         for (let i = 1; i <= length; i++) {
-          images_array.push(downloadImage(sliced_url, chapter_list, chapter, i));
+          images_array.push(downloadImage(sliced_url, dest, i));
         }
 
         return Promise.all(images_array);
